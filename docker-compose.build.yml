@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: users
+
+    ports:
+      - "5432:5432"
+
+  user-service:
+    build: .
+
+    environment:
+      DB_HOST: postgres
+      DB_USER: app
+      DB_PASSWORD: app
+      DB_NAME: users
+
+      OTEL_SERVICE_NAME: user-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - postgres

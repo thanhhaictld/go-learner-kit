@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: users
+
+    ports:
+      - "5453:5432"
