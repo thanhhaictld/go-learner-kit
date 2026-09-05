@@ -66,6 +66,11 @@ watch:
 test:
 	go test ./...
 
+.PHONY: rest_test
+test_rest:
+	cd ./etc &&	httpyac ./user-svc.http --env dev
+
 .PHONY: fmt
 fmt:
 	go fmt ./...
+
