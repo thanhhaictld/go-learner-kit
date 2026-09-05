@@ -2,12 +2,16 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/google/uuid"
 	"github.com/haidodev/user-service/internal/domain"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
+
+var ErrEmailAlreadyExists = errors.New("email already exists")
 
 type UserRepository interface {
 	// CreateUser creates a new user in the repository.
@@ -32,9 +36,18 @@ func NewUserRepository(dbContext *gorm.DB) UserRepository {
 }
 
 func (repo *ImplUserRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	// Implementation for creating a user in the repository (e.g., database)
-	// This is a placeholder; actual implementation will depend on the database being used.
-	return repo.dbContext.WithContext(ctx).Create(user).Error
+	if err := repo.dbContext.WithContext(ctx).Create(user).Error; err != nil {
+		if isUniqueEmailViolation(err) {
+			return ErrEmailAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
+func isUniqueEmailViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_users_email"
 }
 
 func (repo *ImplUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
