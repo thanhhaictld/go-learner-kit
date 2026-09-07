@@ -19,9 +19,33 @@ DATABASE_URL=postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAM
 # migration targets.
 export DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSLMODE
 
+.PHONY: prepare
+prepare: prepare
+	@echo "Checking httpyac..."
+	@if command -v httpyac >/dev/null 2>&1; then \
+		echo "httpyac is already installed"; \
+	else \
+		echo "Installing httpyac..."; \
+		npm install httpyac -g; \
+	fi
+
+	@echo "Checking golang-migrate..."
+	@if command -v migrate >/dev/null 2>&1; then \
+		echo "golang-migrate is already installed"; \
+	elif [ "$$(uname -s)" = "Darwin" ]; then \
+		echo "macOS detected. Installing golang-migrate with Homebrew..."; \
+		if ! command -v brew >/dev/null 2>&1; then \
+			echo "Error: Homebrew is not installed."; \
+			exit 1; \
+		fi; \
+		brew install golang-migrate; \
+	else \
+		echo "Installing golang-migrate with go install..."; \
+		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
+	fi
+
 .PHONY: generate
 generate: generate-openapi
-
 
 .PHONY: generate-openapi
 generate-openapi:
@@ -66,7 +90,7 @@ watch:
 test:
 	go test ./...
 
-.PHONY: rest_test
+.PHONY: test_rest
 test_rest:
 	cd ./etc &&	httpyac ./user-svc.http --env dev
 
