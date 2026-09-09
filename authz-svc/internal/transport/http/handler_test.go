@@ -1,0 +1,97 @@
+package http
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/haidodev/authz-service/internal/authz"
+)
+
+type fakeEngine struct {
+	allowed  bool
+	err      error
+	assigned bool
+	revoked  bool
+}
+
+func (f *fakeEngine) Initialize(context.Context) error { return nil }
+func (f *fakeEngine) Check(context.Context, uuid.UUID, uuid.UUID, authz.Permission) (bool, error) {
+	return f.allowed, f.err
+}
+func (f *fakeEngine) AssignAdmin(context.Context, uuid.UUID, uuid.UUID) error {
+	f.assigned = true
+	return f.err
+}
+func (f *fakeEngine) RevokeAdmin(context.Context, uuid.UUID, uuid.UUID) error {
+	f.revoked = true
+	return f.err
+}
+
+const (
+	testActor = "11111111-1111-1111-1111-111111111111"
+	testOrg   = "22222222-2222-2222-2222-222222222222"
+	testUser  = "33333333-3333-3333-3333-333333333333"
+)
+
+func testRouter(engine *fakeEngine) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	org := uuid.MustParse(testOrg)
+	user := uuid.MustParse(testActor)
+	NewHandler(engine, org, user).Register(router)
+	return router
+}
+
+func TestCheckReturnsDecision(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/v1/check", strings.NewReader(`{"subjectId":"`+testActor+`","organizationId":"`+testOrg+`","permission":"list_users"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	testRouter(&fakeEngine{allowed: true}).ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"allowed":true`) {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestAssignAdminRequiresExistingAdmin(t *testing.T) {
+	engine := &fakeEngine{allowed: false}
+	request := httptest.NewRequest(http.MethodPut, "/v1/organizations/"+testOrg+"/users/"+testUser+"/roles/admin", nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	if engine.assigned {
+		t.Fatal("role was assigned without admin permission")
+	}
+}
+
+func TestBootstrapAdminCannotBeRevoked(t *testing.T) {
+	engine := &fakeEngine{allowed: true}
+	request := httptest.NewRequest(http.MethodDelete, "/v1/organizations/"+testOrg+"/users/"+testActor+"/roles/admin", nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	if engine.revoked {
+		t.Fatal("bootstrap admin was revoked")
+	}
+}
+
+func TestCheckMapsEngineFailure(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/v1/check", strings.NewReader(`{"subjectId":"`+testActor+`","organizationId":"`+testOrg+`","permission":"list_users"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	testRouter(&fakeEngine{err: errors.New("OpenFGA offline")}).ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}

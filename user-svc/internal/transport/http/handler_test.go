@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/haidodev/user-service/api/generated"
+	"github.com/haidodev/user-service/internal/authz"
 	"github.com/haidodev/user-service/internal/domain"
 	"github.com/haidodev/user-service/internal/repository"
 	"github.com/haidodev/user-service/internal/service"
@@ -26,12 +27,22 @@ func (repo *fakeUserRepository) CreateUser(_ context.Context, user *domain.User)
 	return repo.createErr
 }
 
-func (repo *fakeUserRepository) GetUserByID(_ context.Context, _ uuid.UUID) (*domain.User, error) {
+func (repo *fakeUserRepository) GetUserByID(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*domain.User, error) {
 	return nil, nil
 }
 
-func (repo *fakeUserRepository) ListUsers(_ context.Context) ([]domain.User, error) {
+func (repo *fakeUserRepository) ListUsers(_ context.Context, _ uuid.UUID) ([]domain.User, error) {
 	return nil, nil
+}
+
+type fakeAuthorizer struct {
+	err    error
+	checks []authz.Permission
+}
+
+func (authorizer *fakeAuthorizer) Check(_ context.Context, _, _ uuid.UUID, permission authz.Permission) error {
+	authorizer.checks = append(authorizer.checks, permission)
+	return authorizer.err
 }
 
 type errorResponse struct {
@@ -43,7 +54,7 @@ type errorResponse struct {
 func newTestRouter(repo *fakeUserRepository) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	generated.RegisterHandlers(router, NewHandler(service.NewUserService(repo)))
+	RegisterRoutes(router, NewHandler(service.NewUserService(repo), &fakeAuthorizer{}))
 	return router
 }
 
@@ -153,9 +164,57 @@ func TestCreateUserDuplicateEmail(t *testing.T) {
 func performCreateUserRequest(router http.Handler, body string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-User-ID", "11111111-1111-1111-1111-111111111111")
+	request.Header.Set("X-Organization-ID", "22222222-2222-2222-2222-222222222222")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	return response
+}
+
+func TestCreateUserAuthorizationFailureDoesNotCreateUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeUserRepository{}
+	authorizer := &fakeAuthorizer{err: authz.ErrDenied}
+	router := gin.New()
+	RegisterRoutes(router, NewHandler(service.NewUserService(repo), authorizer))
+
+	response := performCreateUserRequest(router, `{"email":"ada@example.com","name":"Ada"}`)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	if repo.created != nil {
+		t.Fatal("repository received a user after authorization was denied")
+	}
+}
+
+func TestCreateUserAuthorizationUnavailableDoesNotCreateUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeUserRepository{}
+	authorizer := &fakeAuthorizer{err: errors.New("authz unavailable")}
+	router := gin.New()
+	RegisterRoutes(router, NewHandler(service.NewUserService(repo), authorizer))
+
+	response := performCreateUserRequest(router, `{"email":"ada@example.com","name":"Ada"}`)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+	if repo.created != nil {
+		t.Fatal("repository received a user when authorization was unavailable")
+	}
+}
+
+func TestCreateUserMissingIdentityIsUnauthorized(t *testing.T) {
+	repo := &fakeUserRepository{}
+	request := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"email":"ada@example.com","name":"Ada"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	newTestRouter(repo).ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	if repo.created != nil {
+		t.Fatal("repository received a user without trusted identity")
+	}
 }
 
 func decodeResponse(t *testing.T, response *httptest.ResponseRecorder, destination any) {

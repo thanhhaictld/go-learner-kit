@@ -18,10 +18,10 @@ type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
 
 	// GetUserByID retrieves a user by their ID from the repository.
-	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID, organizationID uuid.UUID) (*domain.User, error)
 
 	// ListUsers retrieves all users from the repository.
-	ListUsers(ctx context.Context) ([]domain.User, error)
+	ListUsers(ctx context.Context, organizationID uuid.UUID) ([]domain.User, error)
 }
 
 type ImplUserRepository struct {
@@ -47,24 +47,24 @@ func (repo *ImplUserRepository) CreateUser(ctx context.Context, user *domain.Use
 
 func isUniqueEmailViolation(err error) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_users_email"
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_users_organization_email"
 }
 
-func (repo *ImplUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+func (repo *ImplUserRepository) GetUserByID(ctx context.Context, id uuid.UUID, organizationID uuid.UUID) (*domain.User, error) {
 	log.Printf("querying with userid: %s", id)
 	// Implementation for retrieving a user by ID in the repository (e.g., database)
 	// This is a placeholder; actual implementation will depend on the database being used.
 	var user domain.User
-	err := repo.dbContext.WithContext(ctx).First(&user, id).Error
+	err := repo.dbContext.WithContext(ctx).Where("id = ? AND organization_id = ?", id, organizationID).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (repo *ImplUserRepository) ListUsers(ctx context.Context) ([]domain.User, error) {
+func (repo *ImplUserRepository) ListUsers(ctx context.Context, organizationID uuid.UUID) ([]domain.User, error) {
 	var users []domain.User
-	if err := repo.dbContext.WithContext(ctx).Order("created_at DESC").Find(&users).Error; err != nil {
+	if err := repo.dbContext.WithContext(ctx).Where("organization_id = ?", organizationID).Order("created_at DESC").Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil

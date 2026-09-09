@@ -17,7 +17,7 @@ func TestIsUniqueEmailViolation(t *testing.T) {
 			name: "email unique constraint",
 			err: fmt.Errorf("create user: %w", &pgconn.PgError{
 				Code:           "23505",
-				ConstraintName: "ux_users_email",
+				ConstraintName: "ux_users_organization_email",
 			}),
 			want: true,
 		},
@@ -33,7 +33,7 @@ func TestIsUniqueEmailViolation(t *testing.T) {
 			name: "different postgres error",
 			err: &pgconn.PgError{
 				Code:           "23503",
-				ConstraintName: "ux_users_email",
+				ConstraintName: "ux_users_organization_email",
 			},
 			want: false,
 		},

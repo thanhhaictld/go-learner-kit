@@ -1,0 +1,82 @@
+services:
+  user-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: users
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d users"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  user-migrate:
+    image: migrate/migrate:v4.19.1
+    command: ["-path", "/migrations", "-database", "postgres://app:app@user-db:5432/users?sslmode=disable", "up"]
+    volumes:
+      - ./user-svc/migrations:/migrations:ro
+    depends_on:
+      user-db:
+        condition: service_healthy
+
+  openfga-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: openfga
+      POSTGRES_PASSWORD: openfga
+      POSTGRES_DB: openfga
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfga -d openfga"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  openfga-migrate:
+    image: openfga/openfga:v1.10.3
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+
+  openfga:
+    image: openfga/openfga:v1.10.3
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+
+  authz-service:
+    build: ./authz-svc
+    environment:
+      FGA_API_URL: http://openfga:8080
+      FGA_STORE_NAME: go-learner-authz
+      BOOTSTRAP_ORGANIZATION_ID: ${BOOTSTRAP_ORGANIZATION_ID:-22222222-2222-2222-2222-222222222222}
+      BOOTSTRAP_ADMIN_USER_ID: ${BOOTSTRAP_ADMIN_USER_ID:-11111111-1111-1111-1111-111111111111}
+    depends_on:
+      openfga:
+        condition: service_started
+
+  user-service:
+    build: ./user-svc
+    environment:
+      DB_HOST: user-db
+      DB_PORT: 5432
+      DB_USER: app
+      DB_PASSWORD: app
+      DB_NAME: users
+      DB_SSLMODE: disable
+      AUTHZ_SERVICE_URL: http://authz-service:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      user-migrate:
+        condition: service_completed_successfully
+      authz-service:
+        condition: service_started

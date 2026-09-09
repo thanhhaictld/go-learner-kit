@@ -1,0 +1,7 @@
+package: generated
+
+generate:
+  gin-server: true
+  models: true
+
+output: api/generated/authz_api.gen.go

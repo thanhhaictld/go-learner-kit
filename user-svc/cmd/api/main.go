@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	"github.com/haidodev/user-service/api/generated"
+	"github.com/haidodev/user-service/internal/authz"
 	"github.com/haidodev/user-service/internal/database"
 	"github.com/haidodev/user-service/internal/repository"
 	"github.com/haidodev/user-service/internal/service"
@@ -44,14 +44,14 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
 
-	handler := userHttp.NewHandler(userService)
+	handler := userHttp.NewHandler(userService, authz.NewClient(os.Getenv("AUTHZ_SERVICE_URL")))
 	router := gin.New()
 
 	// add health probe
 	userHttp.RegisterHealthRoutes(router, db)
 
 	// wiredup generated router -> user-service handler
-	generated.RegisterHandlers(router, handler)
+	userHttp.RegisterRoutes(router, handler)
 
 	server := &http.Server{
 		Addr:    ":8080",

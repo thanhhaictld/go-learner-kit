@@ -200,6 +200,23 @@ The API should be available at:
 http://localhost:8080
 ```
 
+## Organization authorization
+
+Run the complete local stack from the repository root:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The initial administrator and organization are configured through the two UUIDs in `.env`. Requests to user endpoints require the trusted `X-User-ID` and `X-Organization-ID` headers. The development authorization service is private to the Compose network.
+
+The organization migration assumes development data is disposable. If a database already contains users from before this change, reset its development volume before starting the stack:
+
+```bash
+docker compose down -v
+```
+
 ---
 
 # Configuration
@@ -215,6 +232,7 @@ export DB_USER=app
 export DB_PASSWORD=app
 export DB_NAME=users
 export DB_SSLMODE=disable
+
 
 export OTEL_SERVICE_NAME=user-service
 export OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
