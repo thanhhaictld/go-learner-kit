@@ -25,6 +25,11 @@ func (h *Handler) Register(router gin.IRouter) {
 	router.POST("/v1/check", h.Check)
 	router.PUT("/v1/organizations/:organizationId/users/:userId/roles/admin", h.AssignAdmin)
 	router.DELETE("/v1/organizations/:organizationId/users/:userId/roles/admin", h.RevokeAdmin)
+	router.POST("/v1/organizations/:organizationId/roles", h.CreateRole)
+	router.PUT("/v1/organizations/:organizationId/roles/:roleId/users/:userId", h.AssignRole)
+	router.DELETE("/v1/organizations/:organizationId/roles/:roleId/users/:userId", h.RevokeRole)
+	router.PUT("/v1/organizations/:organizationId/roles/:roleId/permissions/:permission", h.GrantRolePermission)
+	router.DELETE("/v1/organizations/:organizationId/roles/:roleId/permissions/:permission", h.RevokeRolePermission)
 }
 
 type checkRequest struct {
@@ -90,15 +95,80 @@ func (h *Handler) RevokeAdmin(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *Handler) roleRequest(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, bool) {
-	actorID, err := uuid.Parse(c.GetHeader("X-User-ID"))
-	if err != nil {
-		writeError(c, http.StatusBadRequest, "invalid_request", "X-User-ID must be a UUID")
-		return uuid.Nil, uuid.Nil, uuid.Nil, false
+func (h *Handler) CreateRole(c *gin.Context) {
+	_, organizationID, ok := h.requireOrganizationAdmin(c)
+	if !ok {
+		return
 	}
-	organizationID, err := uuid.Parse(c.Param("organizationId"))
+	roleID := uuid.New()
+	if err := h.engine.CreateRole(c.Request.Context(), organizationID, roleID); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"id": roleID})
+}
+
+func (h *Handler) AssignRole(c *gin.Context) {
+	roleID, _, ok := h.customRoleRequest(c)
+	if !ok {
+		return
+	}
+	userID, err := uuid.Parse(c.Param("userId"))
 	if err != nil {
-		writeError(c, http.StatusBadRequest, "invalid_request", "organizationId must be a UUID")
+		writeError(c, http.StatusBadRequest, "invalid_request", "userId must be a UUID")
+		return
+	}
+	if err := h.engine.AssignRole(c.Request.Context(), userID, roleID); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) RevokeRole(c *gin.Context) {
+	roleID, _, ok := h.customRoleRequest(c)
+	if !ok {
+		return
+	}
+	userID, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "userId must be a UUID")
+		return
+	}
+	if err := h.engine.RevokeRole(c.Request.Context(), userID, roleID); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) GrantRolePermission(c *gin.Context) {
+	roleID, organizationID, permission, ok := h.rolePermissionRequest(c)
+	if !ok {
+		return
+	}
+	if err := h.engine.GrantRolePermission(c.Request.Context(), organizationID, roleID, permission); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) RevokeRolePermission(c *gin.Context) {
+	roleID, organizationID, permission, ok := h.rolePermissionRequest(c)
+	if !ok {
+		return
+	}
+	if err := h.engine.RevokeRolePermission(c.Request.Context(), organizationID, roleID, permission); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) roleRequest(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, bool) {
+	actorID, organizationID, ok := h.requireOrganizationAdmin(c)
+	if !ok {
 		return uuid.Nil, uuid.Nil, uuid.Nil, false
 	}
 	targetID, err := uuid.Parse(c.Param("userId"))
@@ -106,16 +176,65 @@ func (h *Handler) roleRequest(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, 
 		writeError(c, http.StatusBadRequest, "invalid_request", "userId must be a UUID")
 		return uuid.Nil, uuid.Nil, uuid.Nil, false
 	}
-	allowed, err := h.engine.Check(c.Request.Context(), actorID, organizationID, authz.PermissionListUsers)
+	return actorID, organizationID, targetID, true
+}
+
+func (h *Handler) requireOrganizationAdmin(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
+	actorID, err := uuid.Parse(c.GetHeader("X-User-ID"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "X-User-ID must be a UUID")
+		return uuid.Nil, uuid.Nil, false
+	}
+	organizationID, err := uuid.Parse(c.Param("organizationId"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "organizationId must be a UUID")
+		return uuid.Nil, uuid.Nil, false
+	}
+	allowed, err := h.engine.Check(c.Request.Context(), actorID, organizationID, authz.PermissionManageRoles)
 	if err != nil {
 		writeEngineError(c, err)
-		return uuid.Nil, uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, false
 	}
 	if !allowed {
 		writeError(c, http.StatusForbidden, "permission_denied", "organization admin permission is required")
-		return uuid.Nil, uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, false
 	}
-	return actorID, organizationID, targetID, true
+	return actorID, organizationID, true
+}
+
+func (h *Handler) customRoleRequest(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
+	_, organizationID, ok := h.requireOrganizationAdmin(c)
+	if !ok {
+		return uuid.Nil, uuid.Nil, false
+	}
+	roleID, err := uuid.Parse(c.Param("roleId"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "roleId must be a UUID")
+		return uuid.Nil, uuid.Nil, false
+	}
+	exists, err := h.engine.RoleExists(c.Request.Context(), organizationID, roleID)
+	if err != nil {
+		writeEngineError(c, err)
+		return uuid.Nil, uuid.Nil, false
+	}
+	if !exists {
+		writeError(c, http.StatusNotFound, "not_found", "role not found in organization")
+		return uuid.Nil, uuid.Nil, false
+	}
+	return roleID, organizationID, true
+}
+
+func (h *Handler) rolePermissionRequest(c *gin.Context) (uuid.UUID, uuid.UUID, authz.Permission, bool) {
+	roleID, organizationID, ok := h.customRoleRequest(c)
+	if !ok {
+		return uuid.Nil, uuid.Nil, "", false
+	}
+	permission := authz.Permission(c.Param("permission"))
+	if !permission.AssignableToCustomRole() {
+		writeError(c, http.StatusBadRequest, "invalid_request", "unsupported custom role permission")
+		return uuid.Nil, uuid.Nil, "", false
+	}
+	return roleID, organizationID, permission, true
 }
 
 func writeEngineError(c *gin.Context, err error) {

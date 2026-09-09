@@ -46,6 +46,75 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles:
+    post:
+      operationId: createRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '201':
+          description: Custom role created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles/{roleId}/users/{userId}:
+    put:
+      operationId: assignRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Role assigned }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: revokeRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Role revoked }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles/{roleId}/permissions/{permission}:
+    put:
+      operationId: grantRolePermission
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/Permission'
+      responses:
+        '204': { description: Permission granted to role }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: revokeRolePermission
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/Permission'
+      responses:
+        '204': { description: Permission revoked from role }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
 components:
   parameters:
     ActorId:
@@ -63,6 +132,16 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Permission:
+      name: permission
+      in: path
+      required: true
+      schema: { type: string, enum: [list_users, create_user] }
   responses:
     Error:
       description: Error response
@@ -82,6 +161,11 @@ components:
       required: [allowed]
       properties:
         allowed: { type: boolean }
+    Role:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
     Error:
       type: object
       required: [code, message]

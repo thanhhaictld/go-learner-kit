@@ -16,7 +16,7 @@ import (
 
 var ErrTupleAlreadyExists = errors.New("OpenFGA tuple already exists")
 
-const authorizationModel = `{"schema_version":"1.1","type_definitions":[{"type":"user"},{"type":"organization","relations":{"admin":{"this":{}},"list_users":{"computedUserset":{"relation":"admin"}},"create_user":{"computedUserset":{"relation":"admin"}}},"metadata":{"relations":{"admin":{"directly_related_user_types":[{"type":"user"}]}}}}]}`
+const authorizationModel = `{"schema_version":"1.1","type_definitions":[{"type":"user"},{"type":"role","relations":{"organization":{"this":{}},"assignee":{"this":{}}},"metadata":{"relations":{"organization":{"directly_related_user_types":[{"type":"organization"}]},"assignee":{"directly_related_user_types":[{"type":"user"}]}}}},{"type":"organization","relations":{"admin":{"this":{}},"manage_roles":{"computedUserset":{"relation":"admin"}},"list_users":{"union":{"child":[{"computedUserset":{"relation":"admin"}},{"this":{}}]}},"create_user":{"union":{"child":[{"computedUserset":{"relation":"admin"}},{"this":{}}]}}},"metadata":{"relations":{"admin":{"directly_related_user_types":[{"type":"user"}]},"list_users":{"directly_related_user_types":[{"type":"role","relation":"assignee"}]},"create_user":{"directly_related_user_types":[{"type":"role","relation":"assignee"}]}}}}]}`
 
 type Config struct {
 	APIURL                  string
@@ -89,23 +89,65 @@ func (f *OpenFGA) Check(ctx context.Context, subjectID, organizationID uuid.UUID
 }
 
 func (f *OpenFGA) AssignAdmin(ctx context.Context, subjectID, organizationID uuid.UUID) error {
-	return f.writeTuple(ctx, "writes", subjectID, organizationID)
+	return f.writeRelation(ctx, "writes", f.user(subjectID), "admin", f.organization(organizationID))
 }
 
 func (f *OpenFGA) RevokeAdmin(ctx context.Context, subjectID, organizationID uuid.UUID) error {
-	return f.writeTuple(ctx, "deletes", subjectID, organizationID)
+	return f.writeRelation(ctx, "deletes", f.user(subjectID), "admin", f.organization(organizationID))
 }
 
-func (f *OpenFGA) writeTuple(ctx context.Context, operation string, subjectID, organizationID uuid.UUID) error {
+func (f *OpenFGA) CreateRole(ctx context.Context, organizationID, roleID uuid.UUID) error {
+	return f.writeRelation(ctx, "writes", f.organization(organizationID), "organization", f.role(roleID))
+}
+
+func (f *OpenFGA) RoleExists(ctx context.Context, organizationID, roleID uuid.UUID) (bool, error) {
+	return f.checkRelation(ctx, f.organization(organizationID), "organization", f.role(roleID))
+}
+
+func (f *OpenFGA) AssignRole(ctx context.Context, subjectID, roleID uuid.UUID) error {
+	return f.writeRelation(ctx, "writes", f.user(subjectID), "assignee", f.role(roleID))
+}
+
+func (f *OpenFGA) RevokeRole(ctx context.Context, subjectID, roleID uuid.UUID) error {
+	return f.writeRelation(ctx, "deletes", f.user(subjectID), "assignee", f.role(roleID))
+}
+
+func (f *OpenFGA) GrantRolePermission(ctx context.Context, organizationID, roleID uuid.UUID, permission Permission) error {
+	return f.writeRelation(ctx, "writes", f.roleUserset(roleID), string(permission), f.organization(organizationID))
+}
+
+func (f *OpenFGA) RevokeRolePermission(ctx context.Context, organizationID, roleID uuid.UUID, permission Permission) error {
+	return f.writeRelation(ctx, "deletes", f.roleUserset(roleID), string(permission), f.organization(organizationID))
+}
+
+func (f *OpenFGA) writeRelation(ctx context.Context, operation, user, relation, object string) error {
 	storeID, modelID, ok := f.identifiers()
 	if !ok {
 		return fmt.Errorf("%w: client has not been initialized", ErrUnavailable)
 	}
 	body := map[string]any{
 		"authorization_model_id": modelID,
-		operation:                map[string]any{"tuple_keys": []map[string]string{{"user": f.user(subjectID), "relation": "admin", "object": f.organization(organizationID)}}},
+		operation:                map[string]any{"tuple_keys": []map[string]string{{"user": user, "relation": relation, "object": object}}},
 	}
 	return f.request(ctx, http.MethodPost, "/stores/"+storeID+"/write", body, nil)
+}
+
+func (f *OpenFGA) checkRelation(ctx context.Context, user, relation, object string) (bool, error) {
+	storeID, modelID, ok := f.identifiers()
+	if !ok {
+		return false, fmt.Errorf("%w: client has not been initialized", ErrUnavailable)
+	}
+	body := map[string]any{
+		"authorization_model_id": modelID,
+		"tuple_key":              map[string]string{"user": user, "relation": relation, "object": object},
+	}
+	var response struct {
+		Allowed bool `json:"allowed"`
+	}
+	if err := f.request(ctx, http.MethodPost, "/stores/"+storeID+"/check", body, &response); err != nil {
+		return false, err
+	}
+	return response.Allowed, nil
 }
 
 func (f *OpenFGA) findOrCreateStore(ctx context.Context) (string, error) {
@@ -200,3 +242,5 @@ func (f *OpenFGA) identifiers() (string, string, bool) {
 
 func (f *OpenFGA) user(id uuid.UUID) string         { return "user:" + id.String() }
 func (f *OpenFGA) organization(id uuid.UUID) string { return "organization:" + id.String() }
+func (f *OpenFGA) role(id uuid.UUID) string         { return "role:" + id.String() }
+func (f *OpenFGA) roleUserset(id uuid.UUID) string  { return f.role(id) + "#assignee" }

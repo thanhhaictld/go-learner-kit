@@ -14,10 +14,14 @@ import (
 )
 
 type fakeEngine struct {
-	allowed  bool
-	err      error
-	assigned bool
-	revoked  bool
+	allowed        bool
+	roleExists     bool
+	err            error
+	assigned       bool
+	revoked        bool
+	roleCreated    bool
+	roleAssigned   bool
+	rolePermission authz.Permission
 }
 
 func (f *fakeEngine) Initialize(context.Context) error { return nil }
@@ -30,6 +34,25 @@ func (f *fakeEngine) AssignAdmin(context.Context, uuid.UUID, uuid.UUID) error {
 }
 func (f *fakeEngine) RevokeAdmin(context.Context, uuid.UUID, uuid.UUID) error {
 	f.revoked = true
+	return f.err
+}
+func (f *fakeEngine) CreateRole(context.Context, uuid.UUID, uuid.UUID) error {
+	f.roleCreated = true
+	return f.err
+}
+func (f *fakeEngine) RoleExists(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return f.roleExists, f.err
+}
+func (f *fakeEngine) AssignRole(context.Context, uuid.UUID, uuid.UUID) error {
+	f.roleAssigned = true
+	return f.err
+}
+func (f *fakeEngine) RevokeRole(context.Context, uuid.UUID, uuid.UUID) error { return f.err }
+func (f *fakeEngine) GrantRolePermission(_ context.Context, _ uuid.UUID, _ uuid.UUID, permission authz.Permission) error {
+	f.rolePermission = permission
+	return f.err
+}
+func (f *fakeEngine) RevokeRolePermission(context.Context, uuid.UUID, uuid.UUID, authz.Permission) error {
 	return f.err
 }
 
@@ -93,5 +116,54 @@ func TestCheckMapsEngineFailure(t *testing.T) {
 	testRouter(&fakeEngine{err: errors.New("OpenFGA offline")}).ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCreateCustomRoleRequiresAdmin(t *testing.T) {
+	engine := &fakeEngine{allowed: false}
+	request := httptest.NewRequest(http.MethodPost, "/v1/organizations/"+testOrg+"/roles", nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || engine.roleCreated {
+		t.Fatalf("status = %d, roleCreated = %v", response.Code, engine.roleCreated)
+	}
+}
+
+func TestCreateCustomRole(t *testing.T) {
+	engine := &fakeEngine{allowed: true}
+	request := httptest.NewRequest(http.MethodPost, "/v1/organizations/"+testOrg+"/roles", nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !engine.roleCreated {
+		t.Fatalf("status = %d, roleCreated = %v", response.Code, engine.roleCreated)
+	}
+	if !strings.Contains(response.Body.String(), `"id"`) {
+		t.Fatalf("response = %s, want generated role ID", response.Body.String())
+	}
+}
+
+func TestAssignCustomRoleRequiresExistingOrganizationRole(t *testing.T) {
+	engine := &fakeEngine{allowed: true, roleExists: false}
+	roleID := "44444444-4444-4444-4444-444444444444"
+	request := httptest.NewRequest(http.MethodPut, "/v1/organizations/"+testOrg+"/roles/"+roleID+"/users/"+testUser, nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || engine.roleAssigned {
+		t.Fatalf("status = %d, roleAssigned = %v", response.Code, engine.roleAssigned)
+	}
+}
+
+func TestGrantCustomRolePermission(t *testing.T) {
+	engine := &fakeEngine{allowed: true, roleExists: true}
+	roleID := "44444444-4444-4444-4444-444444444444"
+	request := httptest.NewRequest(http.MethodPut, "/v1/organizations/"+testOrg+"/roles/"+roleID+"/permissions/create_user", nil)
+	request.Header.Set("X-User-ID", testActor)
+	response := httptest.NewRecorder()
+	testRouter(engine).ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || engine.rolePermission != authz.PermissionCreateUsers {
+		t.Fatalf("status = %d, rolePermission = %q", response.Code, engine.rolePermission)
 	}
 }

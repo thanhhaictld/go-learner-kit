@@ -31,6 +31,18 @@ X-Organization-ID: <organization UUID>
 
 OpenFGA stores role assignments as organization relationships. In the initial model, an organization `admin` can `list_users` and `create_user`; retrieving a user requires `list_users` and is restricted to the requested organization.
 
+## Custom roles
+
+Organization administrators can create a UUID-backed custom role, grant it `list_users` and/or `create_user`, then assign it to users. Role management stays with direct organization admins, so a custom role cannot grant itself more permissions.
+
+```text
+POST /v1/organizations/{organizationId}/roles
+PUT  /v1/organizations/{organizationId}/roles/{roleId}/permissions/{permission}
+PUT  /v1/organizations/{organizationId}/roles/{roleId}/users/{userId}
+```
+
+These private `authz-service` routes require the acting administrator in `X-User-ID`. See [authz-svc/README.md](authz-svc/README.md) for the full API, including revocation routes.
+
 ## Services
 
 | Service | Responsibility |
