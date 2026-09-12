@@ -20,6 +20,33 @@ services:
       user-db:
         condition: service_healthy
 
+  identity-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: identity
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d identity"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  identity-migrate:
+    build: ./src/identity-svc
+    command: ["--migrate"]
+    environment:
+      ConnectionStrings__Default: Host=identity-db;Port=5432;Database=identity;Username=app;Password=app
+      OpenIddict__Issuer: http://localhost:8081
+      OpenIddict__AllowInsecureHttp: "true"
+      Bootstrap__OrganizationId: ${BOOTSTRAP_ORGANIZATION_ID:-22222222-2222-2222-2222-222222222222}
+      Bootstrap__AdminUserId: ${BOOTSTRAP_ADMIN_USER_ID:-11111111-1111-1111-1111-111111111111}
+      Bootstrap__AdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.test}
+      Bootstrap__AdminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-changeMe@123!}
+    depends_on:
+      identity-db:
+        condition: service_healthy
+
   openfga-db:
     image: postgres:17
     environment:
@@ -60,8 +87,25 @@ services:
       FGA_STORE_NAME: go-learner-authz
       BOOTSTRAP_ORGANIZATION_ID: ${BOOTSTRAP_ORGANIZATION_ID:-22222222-2222-2222-2222-222222222222}
       BOOTSTRAP_ADMIN_USER_ID: ${BOOTSTRAP_ADMIN_USER_ID:-11111111-1111-1111-1111-111111111111}
+      IDENTITY_PROVISIONING_TOKEN: ${IDENTITY_PROVISIONING_TOKEN:-development-only-change-me}
     depends_on:
       openfga:
+        condition: service_started
+
+  identity-service:
+    build: ./src/identity-svc
+    environment:
+      ConnectionStrings__Default: Host=identity-db;Port=5432;Database=identity;Username=app;Password=app
+      OpenIddict__Issuer: http://localhost:8081
+      OpenIddict__AllowInsecureHttp: "true"
+      Authz__ServiceUrl: http://authz-service:8080
+      Authz__ProvisioningToken: ${IDENTITY_PROVISIONING_TOKEN:-development-only-change-me}
+    ports:
+      - "8081:8080"
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+      authz-service:
         condition: service_started
 
   user-service:
@@ -98,6 +142,14 @@ services:
       openfga-db:
         condition: service_healthy
 
+  identity-db-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    environment:
+      DATA_SOURCE_NAME: postgresql://app:app@identity-db:5432/identity?sslmode=disable
+    depends_on:
+      identity-db:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v3.5.0
     command:
@@ -113,6 +165,8 @@ services:
       user-service:
         condition: service_started
       authz-service:
+        condition: service_started
+      identity-service:
         condition: service_started
 
   grafana:

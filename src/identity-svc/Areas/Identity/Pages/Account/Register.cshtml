@@ -1,0 +1,22 @@
+@page
+@model Identity.Svc.Areas.Identity.Pages.Account.RegisterModel
+@{ ViewData["Title"] = "Create account"; }
+<div class="min-h-screen bg-slate-100 px-4 py-12 lg:pt-24">
+    <div class="mx-auto flex w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg dark:bg-gray-800 lg:max-w-4xl">
+        <div class="hidden bg-cover lg:block lg:w-1/2" style="background-image: url('https://images.unsplash.com/photo-1606660265514-358ebbadc80d?auto=format&amp;fit=crop&amp;w=1575&amp;q=80');"></div>
+        <div class="w-full px-6 py-8 md:px-8 lg:w-1/2">
+            <div class="mx-auto flex justify-center"><img class="h-8 w-auto" src="https://merakiui.com/images/logo.svg" alt="SaaS platform" /></div>
+            <p class="mt-3 text-center text-xl text-gray-600 dark:text-gray-200">Welcome to registration!</p>
+            <div class="mt-4 flex items-center justify-between"><span class="w-1/5 border-b dark:border-gray-600"></span><span class="text-xs uppercase text-gray-500 dark:text-gray-400">sign up with email</span><span class="w-1/5 border-b dark:border-gray-600"></span></div>
+            <form method="post"><input type="hidden" asp-for="ReturnUrl" />
+                <div class="mt-4"><label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-200" asp-for="Input.Email">Email address</label><input class="block w-full rounded-lg border px-4 py-2 text-gray-700 focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300" asp-for="Input.Email" autocomplete="email" /><span class="mt-2 text-xs text-red-400" asp-validation-for="Input.Email"></span></div>
+                <div class="mt-4"><label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-200" asp-for="Input.Password">Password</label><input class="block w-full rounded-lg border px-4 py-2 text-gray-700 focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300" asp-for="Input.Password" autocomplete="new-password" /><span class="mt-2 text-xs text-red-400" asp-validation-for="Input.Password"></span></div>
+                <div class="mt-4"><label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-200" asp-for="Input.ConfirmPassword">Confirm password</label><input class="block w-full rounded-lg border px-4 py-2 text-gray-700 focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300" asp-for="Input.ConfirmPassword" autocomplete="new-password" /></div>
+                <div class="mt-4"><label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-200" asp-for="Input.OrganizationName">Organization name</label><input class="block w-full rounded-lg border px-4 py-2 text-gray-700 focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300" asp-for="Input.OrganizationName" /></div>
+                <div asp-validation-summary="ModelOnly" class="mt-4 text-sm text-red-400" role="alert"></div>
+                <button type="submit" class="mt-6 w-full rounded-lg bg-gray-800 px-6 py-3 text-sm font-medium tracking-wide text-white transition hover:bg-gray-700 focus:outline-none focus:ring focus:ring-gray-300">Sign up</button>
+            </form>
+            <div class="mt-4 flex items-center justify-between"><span class="w-1/5 border-b dark:border-gray-600"></span><a class="text-xs uppercase hover:underline dark:text-gray-200" asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">or sign in</a><span class="w-1/5 border-b dark:border-gray-600"></span></div>
+        </div>
+    </div>
+</div>

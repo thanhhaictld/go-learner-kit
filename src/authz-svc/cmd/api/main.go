@@ -42,7 +42,7 @@ func main() {
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(telemetry.HTTPMetrics("authz-service"))
 	telemetry.RegisterMetricsRoute(router)
-	transport.NewHandler(engine, bootstrapOrg, bootstrapUser).Register(router)
+	transport.NewHandler(engine, bootstrapOrg, bootstrapUser, os.Getenv("IDENTITY_PROVISIONING_TOKEN")).Register(router)
 	server := &http.Server{Addr: ":8080", Handler: router}
 	go func() {
 		log.Printf("authorization service listening on :8080")

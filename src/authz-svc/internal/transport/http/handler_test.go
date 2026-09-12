@@ -95,6 +95,19 @@ func TestAssignAdminRequiresExistingAdmin(t *testing.T) {
 	}
 }
 
+func TestBootstrapAdminRequiresInternalToken(t *testing.T) {
+	engine := &fakeEngine{}
+	router := gin.New()
+	NewHandler(engine, uuid.MustParse(testOrg), uuid.MustParse(testActor), "identity-token").Register(router)
+	request := httptest.NewRequest(http.MethodPost, "/v1/internal/organizations/"+testOrg+"/bootstrap-admin/"+testUser, nil)
+	request.Header.Set("X-Internal-Token", "identity-token")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || !engine.assigned {
+		t.Fatalf("response = %d, assigned = %v", response.Code, engine.assigned)
+	}
+}
+
 func TestBootstrapAdminCannotBeRevoked(t *testing.T) {
 	engine := &fakeEngine{allowed: true}
 	request := httptest.NewRequest(http.MethodDelete, "/v1/organizations/"+testOrg+"/users/"+testActor+"/roles/admin", nil)

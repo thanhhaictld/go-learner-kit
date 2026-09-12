@@ -3,6 +3,22 @@ info:
   title: Authorization Service API
   version: 1.0.0
 paths:
+  /v1/internal/organizations/{organizationId}/bootstrap-admin/{userId}:
+    post:
+      operationId: bootstrapOrganizationAdmin
+      summary: Assign an initial organization admin from identity-svc
+      parameters:
+        - name: X-Internal-Token
+          in: header
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Organization administrator assigned }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /v1/check:
     post:
       operationId: checkPermission

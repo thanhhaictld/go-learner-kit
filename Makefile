@@ -1,13 +1,13 @@
 COMPOSE ?= docker compose
 K6_IMAGE ?= grafana/k6:latest
-K6_NETWORK ?= go-learner-kit_default
+K6_NETWORK ?= go-saas-kit_default
 
 USER_ID ?= 11111111-1111-1111-1111-111111111111
 ORGANIZATION_ID ?= 22222222-2222-2222-2222-222222222222
-LOAD_RATE ?= 1000
-LOAD_DURATION ?= 20s
+LOAD_RATE ?= 100
+LOAD_DURATION ?= 100s
 
-.PHONY: help up down restart build ps logs generate fmt test test-user test-authz monitor k6 k6-once k6-100rps
+.PHONY: help up down restart build ps logs generate fmt test test-user test-authz test-identity monitor k6 k6-once k6-100rps
 
 help:
 	@echo "make up        Start the full development stack"
@@ -16,7 +16,7 @@ help:
 	@echo "make logs      Follow all service logs"
 	@echo "make generate  Generate both OpenAPI bindings"
 	@echo "make fmt       Format both Go services"
-	@echo "make test      Run both Go test suites"
+	@echo "make test      Run all service test suites"
 	@echo "make monitor   Start Prometheus and Grafana"
 	@echo "make k6        Run the full k6 user workflow"
 	@echo "make k6-once   Send one authenticated GET /users request with k6"
@@ -47,13 +47,16 @@ fmt:
 	$(MAKE) -C src/user-svc fmt
 	$(MAKE) -C src/authz-svc fmt
 
-test: test-user test-authz
+test: test-user test-authz test-identity
 
 test-user:
 	$(MAKE) -C src/user-svc test
 
 test-authz:
 	$(MAKE) -C src/authz-svc test
+
+test-identity:
+	dotnet test src/identity-svc/Identity.Svc.csproj
 
 monitor:
 	$(COMPOSE) up -d prometheus grafana

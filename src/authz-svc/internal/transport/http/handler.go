@@ -10,19 +10,25 @@ import (
 )
 
 type Handler struct {
-	engine        authz.Engine
-	bootstrapOrg  uuid.UUID
-	bootstrapUser uuid.UUID
+	engine            authz.Engine
+	bootstrapOrg      uuid.UUID
+	bootstrapUser     uuid.UUID
+	provisioningToken string
 }
 
-func NewHandler(engine authz.Engine, bootstrapOrg, bootstrapUser uuid.UUID) *Handler {
-	return &Handler{engine: engine, bootstrapOrg: bootstrapOrg, bootstrapUser: bootstrapUser}
+func NewHandler(engine authz.Engine, bootstrapOrg, bootstrapUser uuid.UUID, provisioningToken ...string) *Handler {
+	token := ""
+	if len(provisioningToken) > 0 {
+		token = provisioningToken[0]
+	}
+	return &Handler{engine: engine, bootstrapOrg: bootstrapOrg, bootstrapUser: bootstrapUser, provisioningToken: token}
 }
 
 func (h *Handler) Register(router gin.IRouter) {
 	router.GET("/health/live", func(c *gin.Context) { c.Status(http.StatusOK) })
 	router.GET("/health/ready", func(c *gin.Context) { c.Status(http.StatusOK) })
 	router.POST("/v1/check", h.Check)
+	router.POST("/v1/internal/organizations/:organizationId/bootstrap-admin/:userId", h.BootstrapAdmin)
 	router.PUT("/v1/organizations/:organizationId/users/:userId/roles/admin", h.AssignAdmin)
 	router.DELETE("/v1/organizations/:organizationId/users/:userId/roles/admin", h.RevokeAdmin)
 	router.POST("/v1/organizations/:organizationId/roles", h.CreateRole)
@@ -30,6 +36,31 @@ func (h *Handler) Register(router gin.IRouter) {
 	router.DELETE("/v1/organizations/:organizationId/roles/:roleId/users/:userId", h.RevokeRole)
 	router.PUT("/v1/organizations/:organizationId/roles/:roleId/permissions/:permission", h.GrantRolePermission)
 	router.DELETE("/v1/organizations/:organizationId/roles/:roleId/permissions/:permission", h.RevokeRolePermission)
+}
+
+// BootstrapAdmin is a private service-to-service endpoint used only while an
+// organization is created. It avoids giving the identity service general role
+// management rights.
+func (h *Handler) BootstrapAdmin(c *gin.Context) {
+	if h.provisioningToken == "" || c.GetHeader("X-Internal-Token") != h.provisioningToken {
+		writeError(c, http.StatusUnauthorized, "unauthenticated", "invalid internal token")
+		return
+	}
+	organizationID, err := uuid.Parse(c.Param("organizationId"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "organizationId must be a UUID")
+		return
+	}
+	userID, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "userId must be a UUID")
+		return
+	}
+	if err := h.engine.AssignAdmin(c.Request.Context(), userID, organizationID); err != nil {
+		writeEngineError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 type checkRequest struct {

@@ -1,0 +1,23 @@
+using System.Net.Http.Json;
+
+namespace Identity.Svc.Services;
+
+public sealed class OpenFgaProvisioner(HttpClient client, IConfiguration configuration, ILogger<OpenFgaProvisioner> logger)
+{
+    public async Task AssignOrganizationAdminAsync(Guid organizationId, string userId, CancellationToken cancellationToken)
+    {
+        var baseUrl = configuration["Authz:ServiceUrl"];
+        var token = configuration["Authz:ProvisioningToken"];
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(token))
+        {
+            logger.LogWarning("OpenFGA provisioning is not configured; no admin role was assigned for organization {OrganizationId}", organizationId);
+            return;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"{baseUrl.TrimEnd('/')}/v1/internal/organizations/{organizationId}/bootstrap-admin/{userId}");
+        request.Headers.Add("X-Internal-Token", token);
+        using var response = await client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+}
