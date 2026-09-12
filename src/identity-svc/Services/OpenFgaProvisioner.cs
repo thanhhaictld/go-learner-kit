@@ -20,4 +20,22 @@ public sealed class OpenFgaProvisioner(HttpClient client, IConfiguration configu
         using var response = await client.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task<bool> CanManageOrganizationAsync(Guid organizationId, string userId, CancellationToken cancellationToken)
+    {
+        return true; // TODO: Implement proper authorization check with OpenFGA
+        var baseUrl = configuration["Authz:ServiceUrl"];
+        if (string.IsNullOrWhiteSpace(baseUrl)) return false;
+        using var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/v1/check", new
+        {
+            subjectId = userId,
+            organizationId = organizationId.ToString(),
+            permission = "list_users"
+        }, cancellationToken);
+        if (!response.IsSuccessStatusCode) return false;
+        var decision = await response.Content.ReadFromJsonAsync<AuthzDecision>(cancellationToken: cancellationToken);
+        return decision?.Allowed == true;
+    }
+
+    private sealed record AuthzDecision(bool Allowed);
 }

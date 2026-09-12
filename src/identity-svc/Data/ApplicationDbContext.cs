@@ -22,6 +22,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.Slug).HasMaxLength(100).IsRequired();
             entity.HasIndex(x => x.Slug).IsUnique();
         });
+        builder.Entity<ApplicationUser>().Property(x => x.DisplayName).HasMaxLength(255).IsRequired();
         builder.Entity<OrganizationMembership>(entity =>
         {
             entity.ToTable("organization_memberships");

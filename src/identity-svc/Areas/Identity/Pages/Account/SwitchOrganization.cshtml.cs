@@ -17,7 +17,7 @@ public sealed class SwitchOrganizationModel(UserManager<ApplicationUser> users, 
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        var user = await users.GetUserAsync(User);
+        var user = await ResolveUserAsync();
         if (user is null) return RedirectToPage("Login", new { returnUrl = ReturnUrl });
         Organizations = await organizations.GetForUserAsync(user.Id, cancellationToken);
         CurrentUserName = user.UserName ?? user.Email ?? "User";
@@ -27,7 +27,8 @@ public sealed class SwitchOrganizationModel(UserManager<ApplicationUser> users, 
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var user = await users.GetUserAsync(User);
+        var pending = await PendingSignIn.GetAsync(HttpContext);
+        var user = await ResolveUserAsync();
         if (user is null) return RedirectToPage("Login", new { returnUrl = ReturnUrl });
         var available = await organizations.GetForUserAsync(user.Id, cancellationToken);
         if (available.All(x => x.Id != OrganizationId))
@@ -38,7 +39,23 @@ public sealed class SwitchOrganizationModel(UserManager<ApplicationUser> users, 
             CurrentUserEmail = user.Email ?? "";
             return Page();
         }
-        await signInManager.SignInWithClaimsAsync(user, true, [new Claim("org_id", OrganizationId.ToString())]);
-        return LocalRedirect(ReturnUrl ?? Url.Content("~/"));
+        var organization = available.Single(x => x.Id == OrganizationId);
+        var returnUrl = pending?.ReturnUrl ?? ReturnUrl ?? Url.Content("~/");
+        if (user.TwoFactorEnabled || organization.MfaRequired)
+        {
+            await PendingSignIn.SetAsync(HttpContext, user.Id, organization.Id, pending?.RememberMe ?? true, returnUrl);
+            return RedirectToPage(user.TwoFactorEnabled ? "LoginWith2fa" : "SetupAuthenticator");
+        }
+        await PendingSignIn.ClearAsync(HttpContext);
+        await signInManager.SignInWithClaimsAsync(user, pending?.RememberMe ?? true, [new Claim("org_id", OrganizationId.ToString())]);
+        return LocalRedirect(returnUrl);
+    }
+
+    private async Task<ApplicationUser?> ResolveUserAsync()
+    {
+        var user = await users.GetUserAsync(User);
+        if (user is not null) return user;
+        var pending = await PendingSignIn.GetAsync(HttpContext);
+        return pending is null ? null : await users.FindByIdAsync(pending.UserId);
     }
 }
