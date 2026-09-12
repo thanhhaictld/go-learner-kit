@@ -1,0 +1,16 @@
+model
+  schema 1.1
+
+type user
+
+type role
+  relations
+    define organization: [organization]
+    define assignee: [user]
+
+type organization
+  relations
+    define admin: [user]
+    define manage_roles: admin
+    define list_users: admin or [role#assignee]
+    define create_user: admin or [role#assignee]

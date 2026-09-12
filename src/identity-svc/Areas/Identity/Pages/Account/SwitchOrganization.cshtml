@@ -1,0 +1,15 @@
+@page
+@model Identity.Svc.Areas.Identity.Pages.Account.SwitchOrganizationModel
+@{ ViewData["Title"] = "Choose workspace"; }
+<div class="flex min-h-screen flex-col justify-center bg-gray-100 py-12 sm:px-6 lg:px-8">
+    <div class="sm:mx-auto sm:w-full sm:max-w-md"><h2 class="mt-6 text-center text-3xl font-extrabold text-gray-800">Select an organization</h2><p class="mt-2 text-center text-sm text-gray-600">Choose which organization you want to work with</p></div>
+    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md"><div class="border border-gray-100 bg-white px-4 py-8 shadow-lg sm:rounded-xl sm:px-10">
+        <div class="mb-6 flex items-center justify-between border-b border-gray-100 pb-4"><div class="flex items-center"><div class="flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-100 bg-blue-50"><span class="text-lg font-semibold text-blue-600">@Model.CurrentUserName[..1].ToUpperInvariant()</span></div><div class="ml-3"><p class="text-sm font-medium text-gray-800">@Model.CurrentUserName</p><p class="text-xs text-gray-500">@Model.CurrentUserEmail</p></div></div><a class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-800" href="/connect/logout">Sign out</a></div>
+        <form method="post"><input type="hidden" asp-for="ReturnUrl" /><div class="space-y-3"><h3 class="mb-3 text-sm font-medium text-gray-700">Your organizations</h3>
+            @foreach (var organization in Model.Organizations)
+            {
+                <div class="relative"><button type="submit" name="OrganizationId" value="@organization.Id" class="flex w-full items-center rounded-lg border border-gray-200 px-4 py-3 text-left transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"><div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 shadow-sm"><span class="font-medium text-blue-700">@organization.Name[..1].ToUpperInvariant()</span></div><div class="ml-3 flex-1"><p class="text-sm font-medium text-gray-900">@organization.Name</p><p class="text-xs text-gray-500">@organization.Slug</p></div></button></div>
+            }
+        </div><div asp-validation-summary="ModelOnly" class="mt-4 text-sm text-red-500"></div><div class="mt-8"><a href="@Model.ReturnUrl" class="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-center text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">Cancel</a></div></form>
+    </div></div>
+</div>

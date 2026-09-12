@@ -1,0 +1,50 @@
+
+###
+# @name setup
+{{
+    console.log("BASE_URL: ", BASE_URL)
+}}
+
+
+###
+# live probe
+# @ref setup
+GET {{BASE_URL}}/health/live
+
+
+###
+# @name health readiness probe
+# @ref setup
+GET {{BASE_URL}}/health/ready
+
+
+###
+# @name create_user
+# @ref setup
+POST {{BASE_URL}}/users
+Content-Type: application/json
+X-User-ID: {{USER_ID}}
+X-Organization-ID: {{ORGANIZATION_ID}}
+{
+    "name": "John Doe {{$randomInt}}",
+    "email": "john.doe{{$randomInt}}@example.com"
+}
+{{
+    console.log("Response: ", response.parsedBody)
+    exports.userId = response.parsedBody.id
+}}
+
+
+###
+# @name get_user
+# @ref create_user
+GET {{BASE_URL}}/users/{{userId}}
+X-User-ID: {{USER_ID}}
+X-Organization-ID: {{ORGANIZATION_ID}}
+
+
+###
+# @name get_users
+GET {{BASE_URL}}/users
+X-User-ID: {{USER_ID}}
+X-Organization-ID: {{ORGANIZATION_ID}}

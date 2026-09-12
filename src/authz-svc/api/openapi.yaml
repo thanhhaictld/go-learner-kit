@@ -1,0 +1,190 @@
+openapi: 3.0.3
+info:
+  title: Authorization Service API
+  version: 1.0.0
+paths:
+  /v1/internal/organizations/{organizationId}/bootstrap-admin/{userId}:
+    post:
+      operationId: bootstrapOrganizationAdmin
+      summary: Assign an initial organization admin from identity-svc
+      parameters:
+        - name: X-Internal-Token
+          in: header
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Organization administrator assigned }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/check:
+    post:
+      operationId: checkPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRequest'
+      responses:
+        '200':
+          description: Permission decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{organizationId}/users/{userId}/roles/admin:
+    put:
+      operationId: assignAdmin
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Admin role assigned }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: revokeAdmin
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Admin role revoked }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles:
+    post:
+      operationId: createRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '201':
+          description: Custom role created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles/{roleId}/users/{userId}:
+    put:
+      operationId: assignRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Role assigned }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: revokeRole
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Role revoked }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/organizations/{organizationId}/roles/{roleId}/permissions/{permission}:
+    put:
+      operationId: grantRolePermission
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/Permission'
+      responses:
+        '204': { description: Permission granted to role }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: revokeRolePermission
+      parameters:
+        - $ref: '#/components/parameters/ActorId'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RoleId'
+        - $ref: '#/components/parameters/Permission'
+      responses:
+        '204': { description: Permission revoked from role }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    ActorId:
+      name: X-User-ID
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Permission:
+      name: permission
+      in: path
+      required: true
+      schema: { type: string, enum: [list_users, create_user] }
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    CheckRequest:
+      type: object
+      required: [subjectId, organizationId, permission]
+      properties:
+        subjectId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        permission: { type: string, enum: [list_users, create_user] }
+    CheckResponse:
+      type: object
+      required: [allowed]
+      properties:
+        allowed: { type: boolean }
+    Role:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
