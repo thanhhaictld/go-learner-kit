@@ -15,7 +15,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
-        options.SignIn.RequireConfirmedAccount = false;
+        options.SignIn.RequireConfirmedAccount = true;
         options.Password.RequiredLength = 12;
         options.Password.RequireNonAlphanumeric = true;
         options.Lockout.MaxFailedAccessAttempts = 5;
@@ -27,6 +27,15 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Identity/Account/Login";
     options.Cookie.Name = "identity-svc";
 });
+builder.Services.AddAuthentication()
+    .AddCookie("PendingSignIn", options =>
+    {
+        options.Cookie.Name = "identity-svc-pending";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+        options.SlidingExpiration = false;
+    });
+builder.Services.Configure<EmailOptions>(configuration.GetSection("Email"));
+builder.Services.AddSingleton<IAccountEmailSender, SmtpAccountEmailSender>();
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
@@ -38,7 +47,7 @@ builder.Services.AddOpenIddict()
     .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<ApplicationDbContext>())
     .AddServer(options =>
     {
-        // options.SetIssuer(new Uri(configuration["OpenIddict:Issuer"] ?? "http://localhost:8081"));
+        options.SetIssuer(new Uri(configuration["OpenIddict:Issuer"] ?? "http://localhost:8081"));
         options.SetAuthorizationEndpointUris("connect/authorize")
             .SetTokenEndpointUris("connect/token")
             .SetUserinfoEndpointUris("connect/userinfo")

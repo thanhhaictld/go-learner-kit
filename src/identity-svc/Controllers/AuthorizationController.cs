@@ -33,7 +33,7 @@ public sealed class AuthorizationController(UserManager<ApplicationUser> users, 
             OpenIddictConstants.Claims.Name, OpenIddictConstants.Claims.Role);
         identity.SetClaim(OpenIddictConstants.Claims.Subject, user.Id)
             .SetClaim(OpenIddictConstants.Claims.Email, user.Email)
-            .SetClaim(OpenIddictConstants.Claims.Name, user.UserName)
+            .SetClaim(OpenIddictConstants.Claims.Name, user.DisplayName)
             .SetClaim("org_id", organizationId)
             .SetScopes(request.GetScopes())
             .SetDestinations(GetDestinations);

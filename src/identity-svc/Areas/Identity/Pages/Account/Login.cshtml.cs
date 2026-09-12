@@ -25,15 +25,29 @@ public sealed class LoginModel(
     {
         ReturnUrl ??= Url.Content("~/");
         if (!ModelState.IsValid) { logger.LogWarning("Invalid sign-in attempt for email: {Email}", Input.Email); return Page(); }
-        ;
         var user = await users.FindByEmailAsync(Input.Email);
-        if (user is null) { ModelState.AddModelError(string.Empty, "Invalid sign-in attempt."); logger.LogWarning("Invalid sign-in attempt for email: {Email}", Input.Email); return Page(); }
+        if (user is null) { ModelState.AddModelError(string.Empty, "Invalid sign-in attempt."); logger.LogWarning("login failed, since not found email: {Email}", Input.Email); return Page(); }
         var result = await signInManager.CheckPasswordSignInAsync(user, Input.Password, lockoutOnFailure: true);
-        if (!result.Succeeded) { ModelState.AddModelError(string.Empty, "Invalid sign-in attempt."); logger.LogWarning("Invalid sign-in attempt for email: {Email}", Input.Email); return Page(); }
+        if (result.IsLockedOut) { ModelState.AddModelError(string.Empty, "This account is locked. Try again later."); return Page(); }
+        if (!result.Succeeded) { ModelState.AddModelError(string.Empty, "Invalid sign-in attempt."); logger.LogWarning("login failed, password is incorrect for email: {Email}", Input.Email); return Page(); }
         var memberships = await organizations.GetForUserAsync(user.Id, cancellationToken);
         if (memberships.Count == 0) { ModelState.AddModelError(string.Empty, "This account is not a member of an organization."); logger.LogWarning("User {UserId} is not a member of any organization.", user.Id); return Page(); }
-        if (memberships.Count > 1) return RedirectToPage("SwitchOrganization", new { returnUrl = ReturnUrl });
-        await signInManager.SignInWithClaimsAsync(user, Input.RememberMe, [new Claim("org_id", memberships[0].Id.ToString())]);
-        return LocalRedirect(ReturnUrl);
+        if (memberships.Count > 1)
+        {
+            await PendingSignIn.SetAsync(HttpContext, user.Id, null, Input.RememberMe, ReturnUrl);
+            return RedirectToPage("SwitchOrganization");
+        }
+        return await ContinueAsync(user, memberships[0], Input.RememberMe, ReturnUrl, cancellationToken);
+    }
+
+    private async Task<IActionResult> ContinueAsync(ApplicationUser user, Organization organization, bool rememberMe, string returnUrl, CancellationToken cancellationToken)
+    {
+        if (user.TwoFactorEnabled || organization.MfaRequired)
+        {
+            await PendingSignIn.SetAsync(HttpContext, user.Id, organization.Id, rememberMe, returnUrl);
+            return RedirectToPage(user.TwoFactorEnabled ? "LoginWith2fa" : "SetupAuthenticator");
+        }
+        await signInManager.SignInWithClaimsAsync(user, rememberMe, [new Claim("org_id", organization.Id.ToString())]);
+        return LocalRedirect(returnUrl);
     }
 }

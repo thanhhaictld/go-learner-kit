@@ -17,7 +17,7 @@ public sealed class OrganizationController(UserManager<ApplicationUser> users, O
         var user = await users.GetUserAsync(User);
         if (user is null) return Unauthorized();
         var result = await organizations.GetForUserAsync(user.Id, cancellationToken);
-        return Ok(result.Select(x => new { x.Id, x.Name, x.Slug, x.Description }));
+        return Ok(result.Select(x => new { x.Id, x.Name, x.Slug, x.Description, x.MfaRequired }));
     }
 
     [HttpPost]

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Identity.Svc.Services;
 
-public sealed class OrganizationService(ApplicationDbContext db, OpenFgaProvisioner provisioner)
+public sealed class OrganizationService(ApplicationDbContext db, OpenFgaProvisioner provisioner, ILogger<OrganizationService> logger)
 {
     public Task<List<Organization>> GetForUserAsync(string userId, CancellationToken cancellationToken) =>
         db.OrganizationMemberships
@@ -11,6 +11,10 @@ public sealed class OrganizationService(ApplicationDbContext db, OpenFgaProvisio
             .OrderBy(x => x.Organization.Name)
             .Select(x => x.Organization)
             .ToListAsync(cancellationToken);
+
+    public Task<List<OrganizationMembership>> GetMembershipsForUserAsync(string userId, CancellationToken cancellationToken) =>
+        db.OrganizationMemberships.Include(x => x.Organization).Where(x => x.UserId == userId)
+            .OrderBy(x => x.Organization.Name).ToListAsync(cancellationToken);
 
     public async Task<Organization> CreateForUserAsync(string userId, string name, string? description, CancellationToken cancellationToken)
     {
@@ -24,8 +28,33 @@ public sealed class OrganizationService(ApplicationDbContext db, OpenFgaProvisio
         db.Organizations.Add(organization);
         db.OrganizationMemberships.Add(new OrganizationMembership { OrganizationId = organization.Id, UserId = userId });
         await db.SaveChangesAsync(cancellationToken);
-        await provisioner.AssignOrganizationAdminAsync(organization.Id, userId, cancellationToken);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await provisioner.AssignOrganizationAdminAsync(organization.Id, userId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Log the error but do not block the user creation process
+                logger.LogError(ex, "Failed to assign admin role for organization {OrganizationId}", organization.Id);
+            }
+        }, cancellationToken);
         return organization;
+    }
+
+    public Task<Organization?> GetForUserAsync(Guid organizationId, string userId, CancellationToken cancellationToken) =>
+        db.OrganizationMemberships.Where(x => x.OrganizationId == organizationId && x.UserId == userId)
+            .Select(x => x.Organization).SingleOrDefaultAsync(cancellationToken);
+
+    public async Task<bool> UpdateMfaPolicyAsync(Guid organizationId, string userId, bool required, CancellationToken cancellationToken)
+    {
+        if (!await provisioner.CanManageOrganizationAsync(organizationId, userId, cancellationToken)) return false;
+        var organization = await db.Organizations.FindAsync([organizationId], cancellationToken);
+        if (organization is null) return false;
+        organization.MfaRequired = required;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private static string CreateSlug(string name)

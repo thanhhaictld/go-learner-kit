@@ -1,0 +1,4 @@
+@page
+@model Identity.Svc.Areas.Identity.Pages.Account.OrganizationSettingsModel
+@{ ViewData["Title"] = "Organization settings"; }
+<div class="min-h-screen bg-slate-100 px-4 py-12"><section class="mx-auto max-w-md rounded-lg bg-white p-8 shadow-lg"><a class="text-sm text-blue-600" asp-page="Manage/Index">My account</a><h1 class="mt-4 text-2xl font-bold">@Model.Organization?.Name settings</h1>@if (Model.CanManage) { <form method="post" class="mt-6"><input type="hidden" asp-for="OrganizationId" /><label class="flex gap-3"><input asp-for="MfaRequired" /><span><strong>Require MFA</strong><br /><span class="text-sm text-gray-600">Members must enroll in an authenticator app before signing in to this organization.</span></span></label><button class="mt-5 rounded bg-slate-800 px-4 py-2 text-white">Save policy</button></form> } else { <p class="mt-4 text-gray-600">Only organization administrators can change the MFA policy.</p> }</section></div>

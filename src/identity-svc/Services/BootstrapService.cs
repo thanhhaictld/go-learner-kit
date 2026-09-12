@@ -24,7 +24,7 @@ public sealed class BootstrapService(ApplicationDbContext db, UserManager<Applic
         var user = await users.FindByIdAsync(userId);
         if (user is null)
         {
-            user = new ApplicationUser { Id = userId, UserName = email, Email = email, EmailConfirmed = true };
+            user = new ApplicationUser { Id = userId, UserName = email, Email = email, DisplayName = email, EmailConfirmed = true };
             var result = await users.CreateAsync(user, password);
             if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
         }
