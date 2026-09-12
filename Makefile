@@ -4,7 +4,7 @@ K6_NETWORK ?= go-learner-kit_default
 
 USER_ID ?= 11111111-1111-1111-1111-111111111111
 ORGANIZATION_ID ?= 22222222-2222-2222-2222-222222222222
-LOAD_RATE ?= 100
+LOAD_RATE ?= 1000
 LOAD_DURATION ?= 20s
 
 .PHONY: help up down restart build ps logs generate fmt test test-user test-authz monitor k6 k6-once k6-100rps
@@ -40,20 +40,20 @@ logs:
 	$(COMPOSE) logs -f
 
 generate:
-	$(MAKE) -C user-svc generate
-	$(MAKE) -C authz-svc generate
+	$(MAKE) -C src/user-svc generate
+	$(MAKE) -C src/authz-svc generate
 
 fmt:
-	$(MAKE) -C user-svc fmt
-	$(MAKE) -C authz-svc fmt
+	$(MAKE) -C src/user-svc fmt
+	$(MAKE) -C src/authz-svc fmt
 
 test: test-user test-authz
 
 test-user:
-	$(MAKE) -C user-svc test
+	$(MAKE) -C src/user-svc test
 
 test-authz:
-	$(MAKE) -C authz-svc test
+	$(MAKE) -C src/authz-svc test
 
 monitor:
 	$(COMPOSE) up -d prometheus grafana
@@ -65,7 +65,7 @@ k6:
 		-e ORGANIZATION_ID=$(ORGANIZATION_ID) \
 		-e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
 		-e 'K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max' \
-		-v "$(CURDIR)/k6:/scripts:ro" \
+		-v "$(CURDIR)/tests/k6:/scripts:ro" \
 		$(K6_IMAGE) run -o experimental-prometheus-rw /scripts/user-service.js
 
 k6-once:
@@ -75,7 +75,7 @@ k6-once:
 		-e ORGANIZATION_ID=$(ORGANIZATION_ID) \
 		-e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
 		-e 'K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max' \
-		-v "$(CURDIR)/k6:/scripts:ro" \
+		-v "$(CURDIR)/tests/k6:/scripts:ro" \
 		$(K6_IMAGE) run -o experimental-prometheus-rw --vus 1 --iterations 1 /scripts/smoke.js
 
 k6-100rps:
@@ -87,5 +87,5 @@ k6-100rps:
 		-e LOAD_DURATION=$(LOAD_DURATION) \
 		-e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
 		-e 'K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max' \
-		-v "$(CURDIR)/k6:/scripts:ro" \
+		-v "$(CURDIR)/tests/k6:/scripts:ro" \
 		$(K6_IMAGE) run -o experimental-prometheus-rw /scripts/rate.js
