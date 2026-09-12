@@ -14,6 +14,7 @@ import (
 	"github.com/haidodev/user-service/internal/database"
 	"github.com/haidodev/user-service/internal/repository"
 	"github.com/haidodev/user-service/internal/service"
+	"github.com/haidodev/user-service/internal/telemetry"
 	userHttp "github.com/haidodev/user-service/internal/transport/http"
 )
 
@@ -46,6 +47,8 @@ func main() {
 
 	handler := userHttp.NewHandler(userService, authz.NewClient(os.Getenv("AUTHZ_SERVICE_URL")))
 	router := gin.New()
+	router.Use(telemetry.HTTPMetrics("user-service"))
+	telemetry.RegisterMetricsRoute(router)
 
 	// add health probe
 	userHttp.RegisterHealthRoutes(router, db)

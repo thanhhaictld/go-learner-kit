@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/haidodev/authz-service/internal/authz"
+	"github.com/haidodev/authz-service/internal/telemetry"
 	transport "github.com/haidodev/authz-service/internal/transport/http"
 )
 
@@ -39,6 +40,8 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(telemetry.HTTPMetrics("authz-service"))
+	telemetry.RegisterMetricsRoute(router)
 	transport.NewHandler(engine, bootstrapOrg, bootstrapUser).Register(router)
 	server := &http.Server{Addr: ":8080", Handler: router}
 	go func() {

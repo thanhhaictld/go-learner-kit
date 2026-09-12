@@ -12,12 +12,20 @@ flowchart LR
     Authz[authz-service<br/>Gin + OpenAPI]
     FGA[OpenFGA]
     FGADB[(OpenFGA PostgreSQL)]
+    Prometheus[Prometheus]
+    Grafana[Grafana]
 
     Client -->|X-User-ID<br/>X-Organization-ID| User
     User -->|create, list, get| UserDB
     User -->|permission check| Authz
     Authz -->|check and write tuples| FGA
     FGA --> FGADB
+    User -->|/metrics| Prometheus
+    Authz -->|/metrics| Prometheus
+    FGA -->|/metrics| Prometheus
+    UserDB -->|postgres exporter| Prometheus
+    FGADB -->|postgres exporter| Prometheus
+    Prometheus --> Grafana
 ```
 
 `user-service` is the only service exposed on the host. `authz-service`, OpenFGA, and both databases stay on the Compose network.
@@ -118,3 +126,21 @@ The root `Makefile` manages the whole stack and runs k6 from Docker. After `make
 ```bash
 make k6-once
 ```
+
+## Monitoring
+
+`make up` starts Prometheus, Grafana, PostgreSQL exporters, and service metrics alongside the application stack. Grafana is available at [http://localhost:3000](http://localhost:3000) with `admin` / `admin`; anonymous viewing is also enabled for local development. Prometheus is available at [http://localhost:9090](http://localhost:9090).
+
+The provisioned **Go Learner Kit - Services and k6** dashboard shows scrape health for Prometheus, both Go services, OpenFGA, and both databases; Go service request rate, p95 latency, and 5xx errors; and k6 request rate and latency.
+
+The Makefile writes k6 metrics directly to Prometheus whenever it runs a scenario. Run a one-request smoke test or the full workflow, then select the dashboard time range that covers the run:
+
+```bash
+make k6-once
+make k6
+make k6-100rps
+```
+
+`make k6-100rps` runs one `GET /users` request per iteration at a constant arrival rate of 100 requests per second for 20 seconds. Override the defaults with `LOAD_RATE` and `LOAD_DURATION` when needed.
+
+For a monitoring-only startup after the application stack is already running, use `make monitor`. k6 uses its Prometheus remote-write output and Prometheus enables its remote-write receiver for local development. [k6 Prometheus remote write](https://grafana.com/docs/k6/latest/results-output/real-time/prometheus-remote-write/), [OpenFGA metrics configuration](https://openfga.dev/docs/getting-started/setup-openfga/configuration)
