@@ -1,3 +1,4 @@
+using Identity.Svc.Configurations;
 using Identity.Svc.Data;
 using Identity.Svc.Services;
 using Microsoft.AspNetCore.Identity;
@@ -8,6 +9,8 @@ using Prometheus;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
 var configuration = builder.Configuration;
+
+builder.Services.Configure<OpenFgaConfig>(configuration.GetSection("Authz"));
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(configuration.GetConnectionString("Default"), npgsql =>

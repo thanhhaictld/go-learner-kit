@@ -1,13 +1,16 @@
-using System.Net.Http.Json;
+using Identity.Svc.Configurations;
+using Microsoft.Extensions.Options;
 
 namespace Identity.Svc.Services;
 
-public sealed class OpenFgaProvisioner(HttpClient client, IConfiguration configuration, ILogger<OpenFgaProvisioner> logger)
+public sealed class OpenFgaProvisioner(
+    IOptions<OpenFgaConfig> config,
+    HttpClient client, IConfiguration configuration, ILogger<OpenFgaProvisioner> logger)
 {
     public async Task AssignOrganizationAdminAsync(Guid organizationId, string userId, CancellationToken cancellationToken)
     {
-        var baseUrl = configuration["Authz:ServiceUrl"];
-        var token = configuration["Authz:ProvisioningToken"];
+        var baseUrl = config.Value.ServiceUrl;
+        var token = config.Value.ProvisioningToken;
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(token))
         {
             logger.LogWarning("OpenFGA provisioning is not configured; no admin role was assigned for organization {OrganizationId}", organizationId);
@@ -23,7 +26,7 @@ public sealed class OpenFgaProvisioner(HttpClient client, IConfiguration configu
 
     public async Task<bool> CanManageOrganizationAsync(Guid organizationId, string userId, CancellationToken cancellationToken)
     {
-        return true; // TODO: Implement proper authorization check with OpenFGA
+        if (config.Value.SkipChecksInDebug) return true;
         var baseUrl = configuration["Authz:ServiceUrl"];
         if (string.IsNullOrWhiteSpace(baseUrl)) return false;
         using var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/v1/check", new
