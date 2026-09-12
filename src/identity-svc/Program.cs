@@ -38,7 +38,7 @@ builder.Services.AddOpenIddict()
     .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<ApplicationDbContext>())
     .AddServer(options =>
     {
-        options.SetIssuer(new Uri(configuration["OpenIddict:Issuer"] ?? "http://localhost:8081"));
+        // options.SetIssuer(new Uri(configuration["OpenIddict:Issuer"] ?? "http://localhost:8081"));
         options.SetAuthorizationEndpointUris("connect/authorize")
             .SetTokenEndpointUris("connect/token")
             .SetUserinfoEndpointUris("connect/userinfo")
@@ -78,7 +78,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapRazorPages();
-app.MapGet("/", () => Results.Redirect("/Identity/Account/Login"));
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/ready", async (ApplicationDbContext db, CancellationToken cancellationToken) =>
     await db.Database.CanConnectAsync(cancellationToken) ? Results.Ok(new { status = "ok" }) : Results.StatusCode(StatusCodes.Status503ServiceUnavailable));

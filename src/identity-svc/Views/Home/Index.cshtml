@@ -1,0 +1,25 @@
+@model IEnumerable<KeyValuePair<string, string?>>
+@{ ViewData["Title"] = "Account"; }
+
+<div class="min-h-screen bg-slate-100 px-4 py-12 lg:pt-36">
+    <section class="mx-auto w-full max-w-lg rounded-lg bg-white p-8 shadow-lg">
+        <div class="flex items-start justify-between gap-6">
+            <div>
+                <p class="text-sm font-medium uppercase tracking-wide text-blue-600">Signed in</p>
+                <h1 class="mt-1 text-2xl font-bold text-gray-900">Your token claims</h1>
+                <p class="mt-2 text-sm text-gray-600">Claims available from your current sign-in session.</p>
+            </div>
+            <a class="text-sm font-medium text-blue-600 hover:text-blue-800" href="/connect/logout">Sign out</a>
+        </div>
+
+        <dl class="mt-8 divide-y divide-gray-200 rounded-lg border border-gray-200">
+            @foreach (var claim in Model)
+            {
+                <div class="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
+                    <dt class="font-mono text-sm text-gray-500">@claim.Key</dt>
+                    <dd class="break-all text-sm font-medium text-gray-900 sm:col-span-2">@claim.Value</dd>
+                </div>
+            }
+        </dl>
+    </section>
+</div>
