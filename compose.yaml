@@ -100,12 +100,32 @@ services:
       OpenIddict__AllowInsecureHttp: "true"
       Authz__ServiceUrl: http://authz-service:8080
       Authz__ProvisioningToken: ${IDENTITY_PROVISIONING_TOKEN:-development-only-change-me}
+      Email__Smtp__Host: mailpit
+      Email__Smtp__Port: 1025
+      Email__Smtp__EnableSsl: "false"
     ports:
       - "8081:8080"
     depends_on:
       identity-migrate:
         condition: service_completed_successfully
       authz-service:
+        condition: service_started
+      mailpit:
+        condition: service_started
+
+  saas-admin-portal:
+    profiles: ["portal"]
+    build:
+      context: .
+      dockerfile: apps/saas-admin-portal/Dockerfile
+    environment:
+      Authentication__BackchannelAuthority: http://identity-service:8080
+    ports:
+      - "3001:8080"
+    depends_on:
+      identity-service:
+        condition: service_started
+      user-service:
         condition: service_started
 
   user-service:
@@ -185,6 +205,12 @@ services:
     depends_on:
       prometheus:
         condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.24.1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
 volumes:
   prometheus-data:

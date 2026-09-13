@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,6 +18,14 @@ import (
 )
 
 func main() {
+	port := 8080
+	if configuredPort := os.Getenv("HTTP_PORT"); configuredPort != "" {
+		parsedPort, err := strconv.Atoi(configuredPort)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			log.Fatal("HTTP_PORT must be a valid port")
+		}
+		port = parsedPort
+	}
 	bootstrapOrg, err := uuid.Parse(os.Getenv("BOOTSTRAP_ORGANIZATION_ID"))
 	if err != nil {
 		log.Fatal("BOOTSTRAP_ORGANIZATION_ID must be a UUID")
@@ -43,9 +52,9 @@ func main() {
 	router.Use(telemetry.HTTPMetrics("authz-service"))
 	telemetry.RegisterMetricsRoute(router)
 	transport.NewHandler(engine, bootstrapOrg, bootstrapUser, os.Getenv("IDENTITY_PROVISIONING_TOKEN")).Register(router)
-	server := &http.Server{Addr: ":8080", Handler: router}
+	server := &http.Server{Addr: ":" + strconv.Itoa(port), Handler: router}
 	go func() {
-		log.Printf("authorization service listening on :8080")
+		log.Printf("authorization service listening on :%d", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

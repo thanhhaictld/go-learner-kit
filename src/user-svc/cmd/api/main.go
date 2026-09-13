@@ -20,6 +20,14 @@ import (
 
 func main() {
 	ctx := context.Background()
+	port := 8080
+	if configuredPort := os.Getenv("HTTP_PORT"); configuredPort != "" {
+		parsedPort, err := strconv.Atoi(configuredPort)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			log.Fatal("HTTP_PORT must be a valid port")
+		}
+		port = parsedPort
+	}
 
 	db, err := database.NewPostgresConfig(
 		database.Config{
@@ -57,12 +65,12 @@ func main() {
 	userHttp.RegisterRoutes(router, handler)
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + strconv.Itoa(port),
 		Handler: router,
 	}
 
 	go func() {
-		log.Printf("Starting server listening on %d", 8080)
+		log.Printf("Starting server listening on %d", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

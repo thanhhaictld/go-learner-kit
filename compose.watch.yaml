@@ -1,0 +1,22 @@
+services:
+  user-db:
+    ports:
+      - "5443:5432"
+
+  identity-db:
+    ports:
+      - "5444:5432"
+
+  openfga:
+    ports:
+      - "8083:8080"
+
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.watch.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./platform/monitoring/prometheus/prometheus.watch.yml:/etc/prometheus/prometheus.watch.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

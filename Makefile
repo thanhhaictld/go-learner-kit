@@ -1,4 +1,6 @@
 COMPOSE ?= docker compose
+WATCH_COMPOSE ?= docker compose -f compose.yaml -f compose.watch.yaml
+APPHOST ?= apps/devbox/apphost.cs
 K6_IMAGE ?= grafana/k6:latest
 K6_NETWORK ?= go-saas-kit_default
 
@@ -7,13 +9,18 @@ ORGANIZATION_ID ?= 22222222-2222-2222-2222-222222222222
 LOAD_RATE ?= 100
 LOAD_DURATION ?= 100s
 
-.PHONY: help up down restart build ps logs generate fmt test test-user test-authz test-identity monitor k6 k6-once k6-100rps
+.PHONY: help up down restart build ps logs watch watch-stop watch-logs aspire-status aspire-stop aspire-logs portal-up generate fmt test test-user test-authz test-identity test-bff test-portal monitor k6 k6-once k6-100rps
 
 help:
 	@echo "make up        Start the full development stack"
 	@echo "make down      Stop the development stack"
 	@echo "make build     Build service images"
 	@echo "make logs      Follow all service logs"
+	@echo "make watch     Start the Aspire development AppHost"
+	@echo "make aspire-status Show Aspire resource status"
+	@echo "make aspire-stop Stop the Aspire development AppHost"
+	@echo "make aspire-logs Follow Aspire resource logs"
+	@echo "make portal-up Start the production-style portal BFF container"
 	@echo "make generate  Generate both OpenAPI bindings"
 	@echo "make fmt       Format both Go services"
 	@echo "make test      Run all service test suites"
@@ -39,6 +46,26 @@ ps:
 logs:
 	$(COMPOSE) logs -f
 
+watch:
+	aspire start --apphost $(APPHOST)
+
+aspire-status:
+	aspire describe --apphost $(APPHOST)
+
+aspire-stop:
+	aspire stop --apphost $(APPHOST)
+
+aspire-logs:
+	aspire logs --apphost $(APPHOST) --follow
+
+# Compatibility aliases for the previous host-watch commands.
+watch-stop: aspire-stop
+
+watch-logs: aspire-logs
+
+portal-up:
+	$(COMPOSE) --profile portal up --build -d saas-admin-portal
+
 generate:
 	$(MAKE) -C src/user-svc generate
 	$(MAKE) -C src/authz-svc generate
@@ -47,7 +74,7 @@ fmt:
 	$(MAKE) -C src/user-svc fmt
 	$(MAKE) -C src/authz-svc fmt
 
-test: test-user test-authz test-identity
+test: test-user test-authz test-identity test-bff test-portal
 
 test-user:
 	$(MAKE) -C src/user-svc test
@@ -57,6 +84,12 @@ test-authz:
 
 test-identity:
 	dotnet test src/identity-svc/Identity.Svc.csproj
+
+test-bff:
+	dotnet test apps/saas-admin-portal/bff-saas-app/Bff.Saas.App.csproj
+
+test-portal:
+	npm --prefix apps/saas-admin-portal test
 
 monitor:
 	$(COMPOSE) up -d prometheus grafana

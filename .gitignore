@@ -1,4 +1,5 @@
 /tmp/
 /src/identity-svc/node_modules/
+/apps/saas-admin-portal/node_modules/
 obj/
 bin/

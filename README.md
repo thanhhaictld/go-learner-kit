@@ -79,6 +79,18 @@ The user API is available at `http://localhost:8080`. Identity UI is available a
 
 The stack runs OpenFGA's one-shot schema migration before starting OpenFGA. If you started a previous version of the stack and saw `relation "store" does not exist`, apply this update and restart the stack; the `openfga-migrate` service creates the missing tables.
 
+## Control-plane development
+
+The React control plane lives in `apps/saas-admin-portal` and is served through its ASP.NET Core YARP BFF at `http://localhost:3001`. The BFF uses a cookie-backed OpenID Connect authorization-code flow with PKCE against `identity-service`; the registered public client is defined in `src/identity-svc/appsettings.json`.
+
+Run the Aspire AppHost to start host-watch services together with PostgreSQL, OpenFGA, migrations, Mailpit, Prometheus, and Grafana:
+
+```powershell
+make watch
+```
+
+The command starts user service (`8080`), identity service (`8081`), authorization service (`8082`), OpenFGA (`8083`), the BFF (`3001`), and Vite (`5173`). Open `http://localhost:3001`; Mailpit is available at `http://localhost:8025`. Use the Aspire dashboard for resource state and logs, or run `make aspire-status`, `make aspire-logs`, and `make aspire-stop` from another terminal. The AppHost reads bootstrap overrides from `.env`; run `npm ci` in `apps/saas-admin-portal` first when portal dependencies are absent.
+
 Create a user with the seeded administrator:
 
 ```bash

@@ -32,28 +32,51 @@ public sealed class BootstrapService(ApplicationDbContext db, UserManager<Applic
             db.OrganizationMemberships.Add(new OrganizationMembership { OrganizationId = organizationId, UserId = userId });
         await db.SaveChangesAsync(cancellationToken);
 
-        if (await applications.FindByClientIdAsync("saas-web", cancellationToken) is null)
+        var clients = configuration.GetSection("OpenIddict:Applications").Get<List<OpenIddictClientSettings>>() ?? [];
+        foreach (var client in clients)
         {
-            var redirectUri = configuration["Bootstrap:ClientRedirectUri"] ?? "http://localhost:3001/auth/callback";
-            await applications.CreateAsync(new OpenIddictApplicationDescriptor
-            {
-                ClientId = "saas-web",
-                DisplayName = "SaaS Web",
-                ConsentType = OpenIddictConstants.ConsentTypes.Implicit,
-                RedirectUris = { new Uri(redirectUri) },
-                Permissions =
-                {
-                    OpenIddictConstants.Permissions.Endpoints.Authorization,
-                    OpenIddictConstants.Permissions.Endpoints.Token,
-                    OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
-                    OpenIddictConstants.Permissions.GrantTypes.RefreshToken,
-                    OpenIddictConstants.Permissions.ResponseTypes.Code,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Email,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Profile,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess
-                }
-            }, cancellationToken);
+            if (string.IsNullOrWhiteSpace(client.ClientId)) throw new InvalidOperationException("OpenIddict clientId is required.");
+            var descriptor = CreateDescriptor(client);
+            var existing = await applications.FindByClientIdAsync(client.ClientId, cancellationToken);
+            if (existing is null)
+                await applications.CreateAsync(descriptor, cancellationToken);
+            else
+                await applications.UpdateAsync(existing, descriptor, cancellationToken);
         }
     }
+
+    private static OpenIddictApplicationDescriptor CreateDescriptor(OpenIddictClientSettings client)
+    {
+        var descriptor = new OpenIddictApplicationDescriptor
+        {
+            ClientId = client.ClientId,
+            DisplayName = client.DisplayName,
+            ClientType = client.ClientType,
+            ConsentType = OpenIddictConstants.ConsentTypes.Implicit
+        };
+        foreach (var uri in client.RedirectUris) descriptor.RedirectUris.Add(new Uri(uri));
+        foreach (var uri in client.PostLogoutRedirectUris) descriptor.PostLogoutRedirectUris.Add(new Uri(uri));
+        descriptor.Permissions.UnionWith([
+            OpenIddictConstants.Permissions.Endpoints.Authorization,
+            OpenIddictConstants.Permissions.Endpoints.Token,
+            OpenIddictConstants.Permissions.Endpoints.Logout,
+            OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
+            OpenIddictConstants.Permissions.GrantTypes.RefreshToken,
+            OpenIddictConstants.Permissions.ResponseTypes.Code,
+            OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
+            OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Email,
+            OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Profile,
+            OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess
+        ]);
+        return descriptor;
+    }
+}
+
+public sealed class OpenIddictClientSettings
+{
+    public string ClientId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string ClientType { get; set; } = OpenIddictConstants.ClientTypes.Public;
+    public List<string> RedirectUris { get; set; } = [];
+    public List<string> PostLogoutRedirectUris { get; set; } = [];
 }
